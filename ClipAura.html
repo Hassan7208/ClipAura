@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Full Video Tool</title>
+<style>
+  body {
+    margin: 0;
+    background: #000;
+    color: white;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+    min-height: 100vh;
+  }
+  #video-container {
+    position: relative;
+    width: 80%;
+    max-width: 720px;
+    background: #111;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  video {
+    width: 100%;
+    display: block;
+    border-radius: 12px;
+  }
+  #overlayText {
+    position: absolute;
+    top: 15px;
+    left: 20px;
+    color: white;
+    font-weight: bold;
+    font-size: 22px;
+    text-shadow: 1px 1px 6px rgba(0,0,0,0.8);
+    pointer-events: none;
+    user-select: none;
+  }
+  .controls {
+    margin-top: 15px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+  }
+  button, input[type="file"], input[type="text"], input[type="number"] {
+    padding: 10px 16px;
+    font-size: 16px;
+    border: none;
+    border-radius: 30px;
+    cursor: pointer;
+    outline: none;
+    transition: background 0.3s ease;
+    color: white;
+    background: linear-gradient(45deg, #4c68d7, #8e3fcc, #e1306c, #fd1d1d);
+    background-size: 300% 300%;
+    animation: gradientBG 6s ease infinite;
+  }
+  button:hover, input[type="file"]:hover, input[type="text"]:hover, input[type="number"]:hover {
+    filter: brightness(1.2);
+  }
+  input[type="text"] {
+    min-width: 180px;
+    border-radius: 12px;
+    background: #222;
+    color: white;
+    padding-left: 12px;
+  }
+  input[type="number"] {
+    max-width: 80px;
+    border-radius: 12px;
+    background: #222;
+    color: white;
+    padding-left: 12px;
+  }
+  label {
+    cursor: pointer;
+    user-select: none;
+  }
+  #screenshot-result {
+    margin-top: 15px;
+    max-width: 80%;
+    border-radius: 12px;
+    box-shadow: 0 0 15px #e1306c;
+  }
+  #downloadScreenshotBtn {
+    display: none;
+    margin-top: 10px;
+    padding: 10px 20px;
+    background: linear-gradient(45deg, #00c6ff, #0072ff);
+    border-radius: 30px;
+    border: none;
+    color: white;
+    cursor: pointer;
+    font-size: 16px;
+    transition: filter 0.3s ease;
+  }
+  #downloadScreenshotBtn:hover {
+    filter: brightness(1.2);
+  }
+  @keyframes gradientBG {
+    0%{background-position:0% 50%;}
+    50%{background-position:100% 50%;}
+    100%{background-position:0% 50%;}
+  }
+</style>
+</head>
+<body>
+
+<h1>Full Video Tool with Upload, Link, Speed, Screenshot & More</h1>
+
+<div style="margin-bottom:12px;">
+  <input type="file" id="videoUpload" accept="video/*" />
+  <input type="text" id="videoURL" placeholder="Or paste video URL (MP4, direct link)" style="width: 300px; margin-left: 10px;" />
+  <button id="loadVideoBtn">Load Video</button>
+</div>
+
+<div id="video-container">
+  <video id="myVideo" controls crossorigin="anonymous">
+    <source src="https://www.w3schools.com/html/mov_bbb.mp4" type="video/mp4" />
+    Your browser does not support the video tag.
+  </video>
+  <div id="overlayText"></div>
+</div>
+
+<div class="controls">
+  <button id="screenshotBtn">📸 Capture Screenshot</button>
+  <button id="loopBtn">🔁 Toggle Loop</button>
+
+  <label for="playbackSpeedInput" style="align-self:center; margin-left:10px;">Speed:</label>
+  <input type="number" id="playbackSpeedInput" min="0.25" max="3" step="0.05" value="1" title="Playback speed (0.25x to 3x)" />
+
+  <input type="text" id="textInput" placeholder="Add overlay text here" />
+
+  <label for="subtitleUpload" title="Upload subtitles (.vtt or .srt)">
+    📂 Upload Subtitles
+    <input type="file" id="subtitleUpload" accept=".vtt,.srt" style="display:none;" />
+  </label>
+  <button id="toggleSubsBtn" disabled>💬 Toggle Subtitles</button>
+</div>
+
+<img id="screenshot-result" alt="Screenshot will appear here" style="display:none;" />
+<button id="downloadScreenshotBtn">⬇️ Download Screenshot</button>
+
+<script>
+  const video = document.getElementById('myVideo');
+  const overlayText = document.getElementById('overlayText');
+  const screenshotBtn = document.getElementById('screenshotBtn');
+  const loopBtn = document.getElementById('loopBtn');
+  const textInput = document.getElementById('textInput');
+  const subtitleUpload = document.getElementById('subtitleUpload');
+  const toggleSubsBtn = document.getElementById('toggleSubsBtn');
+  const screenshotResult = document.getElementById('screenshot-result');
+  const playbackSpeedInput = document.getElementById('playbackSpeedInput');
+  const videoUpload = document.getElementById('videoUpload');
+  const videoURL = document.getElementById('videoURL');
+  const loadVideoBtn = document.getElementById('loadVideoBtn');
+  const downloadScreenshotBtn = document.getElementById('downloadScreenshotBtn');
+
+  let lastScreenshotDataURL = '';
+
+  // Load video from file or URL
+  loadVideoBtn.addEventListener('click', () => {
+    if (videoUpload.files.length > 0) {
+      const file = videoUpload.files[0];
+      const url = URL.createObjectURL(file);
+      loadVideo(url);
+      videoUpload.value = '';
+      videoURL.value = '';
+      hideScreenshotDownload();
+    } else if (videoURL.value.trim() !== '') {
+      loadVideo(videoURL.value.trim());
+      videoURL.value = '';
+      videoUpload.value = '';
+      hideScreenshotDownload();
+    } else {
+      alert('Please upload a video file or paste a video URL');
+    }
+  });
+
+  function loadVideo(src) {
+    while (video.firstChild) {
+      video.removeChild(video.firstChild);
+    }
+    const source = document.createElement('source');
+    source.src = src;
+    source.type = 'video/mp4';
+    video.appendChild(source);
+    video.load();
+
+    // Remove existing track if any
+    const existingTrack = video.querySelector('track');
+    if (existingTrack) video.removeChild(existingTrack);
+
+    toggleSubsBtn.disabled = true;
+    toggleSubsBtn.textContent = '💬 Toggle Subtitles';
+    overlayText.textContent = '';
+    textInput.value = '';
+    loopBtn.textContent = '🔁 Toggle Loop';
+    playbackSpeedInput.value = 1;
+    screenshotResult.style.display = 'none';
+  }
+
+  // Screenshot capture
+  screenshotBtn.addEventListener('click', () => {
+    if(video.readyState < 2){
+      alert('Video not ready yet!');
+      return;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 360;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Draw overlay text if present
+    if(overlayText.textContent) {
+      ctx.font = '30px Arial';
+      ctx.fillStyle = 'white';
+      ctx.shadowColor = 'black';
+      ctx.shadowBlur = 7;
+      ctx.fillText(overlayText.textContent, 20, 40);
+    }
+
+    const imgUrl = canvas.toDataURL('image/png');
+    lastScreenshotDataURL = imgUrl;
+    screenshotResult.src = imgUrl;
+    screenshotResult.style.display = 'block';
+    showScreenshotDownload();
+  });
+
+  // Show download button
+  function showScreenshotDownload() {
+    downloadScreenshotBtn.style.display = 'inline-block';
+  }
+
+  // Hide download button
+  function hideScreenshotDownload() {
+    downloadScreenshotBtn.style.display = 'none';
+    screenshotResult.style.display = 'none';
+    lastScreenshotDataURL = '';
+  }
+
+  // Download screenshot
+  downloadScreenshotBtn.addEventListener('click', () => {
+    if(!lastScreenshotDataURL) return;
+    const a = document.createElement('a');
+    a.href = lastScreenshotDataURL;
+    a.download = 'video_screenshot.png';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  });
+
+  // Loop toggle
+  loopBtn.addEventListener('click', () => {
+    video.loop = !video.loop;
+    loopBtn.textContent = video.loop ? '🔁 Loop ON' : '🔁 Loop OFF';
+  });
+
+  // Playback speed control
+  playbackSpeedInput.addEventListener('input', (e) => {
+    let val = parseFloat(e.target.value);
+    if(val < 0.25) val = 0.25;
+    if(val > 3) val = 3;
+    video.playbackRate = val;
+    e.target.value = val;
+  });
+
+  // Text overlay
+  textInput.addEventListener('input', (e) => {
+    overlayText.textContent = e.target.value;
+  });
+
+  // Subtitle upload
+  subtitleUpload.addEventListener('change', () => {
+    const file = subtitleUpload.files[0];
+    if(!file) return;
+
+    const url = URL.createObjectURL(file);
+    const existingTrack = video.querySelector('track');
+    if(existingTrack) video.removeChild(existingTrack);
+
+    const track = document.createElement('track');
+    track.kind = 'subtitles';
+    track.label = 'Custom Subtitles';
+    track.srclang = 'en';
+    track.src = url;
+    track.default = true;
+
+    video.appendChild(track);
+    toggleSubsBtn.disabled = false;
+    toggleSubsBtn.textContent = '💬 Subtitles ON';
+    subtitleUpload.value = '';
+  });
+
+  // Toggle subtitles display
+  toggleSubsBtn.addEventListener('click', () => {
+    const textTracks = video.textTracks;
+    if(textTracks.length === 0) return;
+
+    const trackObj = textTracks[0];
+    if(trackObj.mode === 'showing') {
+      trackObj.mode = 'hidden';
+      toggleSubsBtn.textContent = '💬 Subtitles OFF';
+    } else {
+      trackObj.mode = 'showing';
+      toggleSubsBtn.textContent = '💬 Subtitles ON';
+    }
+  });
+</script>
+
+</body>
+</html>
+
